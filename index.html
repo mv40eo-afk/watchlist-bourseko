@@ -17,6 +17,7 @@
     body { background: #070d1a; color: #fff; font-family: 'DM Mono', monospace; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     input:focus, select:focus { border-color: rgba(99,102,241,0.5) !important; outline: none; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -45,19 +46,54 @@
       { id: 11, ticker: "BMI",   name: "Badger Meter",      region: "US", currency: "USD", entries: [160, 135, 97],     style: "Moat durable",                   roce: 24.1, caGrowth: 10.9, per: 29.8 },
     ];
 
-    // Cours réels au 4 mars 2026
-    const REAL_PRICES = {
+    // Cours de secours (dernière valeur connue) si l'API est indisponible
+    const FALLBACK_PRICES = {
       ADYEN: 974, AI: 216, RACE: 360, NEM: 71,
       AXP: 307, BKNG: 4060, MSFT: 404,
       MELI: 1691, SPGI: 417, NVDA: 180, BMI: 149,
     };
 
-    function getPrice(ticker, entries) {
-      if (REAL_PRICES[ticker] !== undefined) return REAL_PRICES[ticker];
-      const seed = ticker.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-      const mid = entries[1], range = entries[0] - entries[2];
-      const offset = ((seed * 7 + Date.now() / 1000000) % 1) - 0.5;
-      return Math.max(entries[2] * 0.85, mid + range * offset * 0.8);
+    // Correspondance ticker Bourseko → symbole Yahoo Finance
+    const YAHOO_SYMBOLS = {
+      ADYEN: "ADYEN.AS",   // Euronext Amsterdam
+      AI:    "EL.PA",      // Euronext Paris (EssilorLuxottica)
+      RACE:  "RACE",       // NYSE
+      NEM:   "NEM.DE",     // XETRA
+      AXP:   "AXP",
+      BKNG:  "BKNG",
+      MSFT:  "MSFT",
+      MELI:  "MELI",
+      SPGI:  "SPGI",
+      NVDA:  "NVDA",
+      BMI:   "BMI",
+    };
+
+    // Cache pour éviter de refaire les requêtes pendant la session
+    const priceCache = {};
+    let lastFetchTime = null;
+    let fetchedPrices = {};
+
+    async function fetchAllPrices(tickers) {
+      const symbols = tickers.map(t => YAHOO_SYMBOLS[t] || t).join(",");
+      // Proxy CORS gratuit → Yahoo Finance v7 quote endpoint
+      const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${symbols}&fields=regularMarketPrice,currency`;
+      const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      try {
+        const res = await fetch(proxy, { headers: { "Accept": "application/json" } });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const quotes = data?.quoteResponse?.result || [];
+        const prices = {};
+        quotes.forEach(q => {
+          // Retrouver le ticker Bourseko à partir du symbole Yahoo
+          const ticker = Object.keys(YAHOO_SYMBOLS).find(t => YAHOO_SYMBOLS[t] === q.symbol) || q.symbol;
+          if (q.regularMarketPrice) prices[ticker] = q.regularMarketPrice;
+        });
+        return prices;
+      } catch (err) {
+        console.warn("Fetch prix échoué, utilisation des cours de secours :", err.message);
+        return null;
+      }
     }
 
     function getZone(price, entries) {
@@ -130,18 +166,24 @@
     }
 
     /* ── StockCard ────────────────────────────────────── */
-    function StockCard({ stock, onEdit, onDelete }) {
+    function StockCard({ stock, onEdit, onDelete, livePrices }) {
       const [price, setPrice]   = useState(null);
       const [loading, setLoading] = useState(true);
 
       useEffect(() => {
         setLoading(true);
-        const t = setTimeout(() => {
-          setPrice(getPrice(stock.ticker, stock.entries));
+        // livePrices is passed as prop from App after global fetch
+        if (livePrices && livePrices[stock.ticker] !== undefined) {
+          setPrice(livePrices[stock.ticker]);
           setLoading(false);
-        }, 300 + Math.random() * 500);
-        return () => clearTimeout(t);
-      }, [stock.ticker, JSON.stringify(stock.entries)]);
+        } else if (livePrices !== null) {
+          // fetch done but ticker not found, use fallback
+          const fb = FALLBACK_PRICES[stock.ticker];
+          setPrice(fb || stock.entries[1]);
+          setLoading(false);
+        }
+        // if livePrices===null, still loading globally — keep loading state
+      }, [stock.ticker, livePrices]);
 
       const zone = price ? getZone(price, stock.entries) : null;
       const sym  = stock.currency === "EUR" ? "€" : "$";
@@ -341,6 +383,28 @@
       const [search,     setSearch]     = useState("");
       const [sortKey,    setSortKey]    = useState("ticker");
       const [refreshKey, setRefreshKey] = useState(0);
+      const [livePrices, setLivePrices] = useState(null);  // null = loading, {} = done
+      const [priceStatus, setPriceStatus] = useState("loading"); // "loading"|"live"|"fallback"
+      const [lastUpdated, setLastUpdated] = useState(null);
+
+      // Fetch all prices on mount and on manual refresh
+      useEffect(() => {
+        setPriceStatus("loading");
+        setLivePrices(null);
+        const tickers = stocks.map(s => s.ticker);
+        fetchAllPrices(tickers).then(prices => {
+          if (prices && Object.keys(prices).length > 0) {
+            // Merge with fallbacks for any missing tickers
+            const merged = { ...FALLBACK_PRICES, ...prices };
+            setLivePrices(merged);
+            setPriceStatus("live");
+          } else {
+            setLivePrices(FALLBACK_PRICES);
+            setPriceStatus("fallback");
+          }
+          setLastUpdated(new Date());
+        });
+      }, [refreshKey]);
 
       const filtered = stocks
         .filter(s => filter === "ALL" || s.region === filter)
@@ -393,10 +457,20 @@
                   placeholder="Rechercher..."
                   style={{ background: "none", border: "none", color: "#fff", fontSize: 12, outline: "none", width: 130 }} />
               </div>
-              <button onClick={() => setRefreshKey(k => k+1)} style={{
-                background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)",
-                color: "rgba(255,255,255,.6)", padding: "8px 14px", borderRadius: 10,
-                cursor: "pointer", fontSize: 11, letterSpacing: 1 }}>⟳ Rafraîchir</button>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                <button onClick={() => setRefreshKey(k => k+1)} style={{
+                  background: priceStatus==="live" ? "rgba(16,185,129,.15)" : priceStatus==="fallback" ? "rgba(251,191,36,.12)" : "rgba(255,255,255,.06)",
+                  border: `1px solid ${priceStatus==="live" ? "rgba(16,185,129,.4)" : priceStatus==="fallback" ? "rgba(251,191,36,.3)" : "rgba(255,255,255,.1)"}`,
+                  color: priceStatus==="live" ? "#6ee7b7" : priceStatus==="fallback" ? "#fbbf24" : "rgba(255,255,255,.6)",
+                  padding: "8px 14px", borderRadius: 10, cursor: "pointer", fontSize: 11, letterSpacing: 1,
+                  display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ display: "inline-block", animation: priceStatus==="loading" ? "spin 1s linear infinite" : "none" }}>⟳</span>
+                  {priceStatus==="loading" ? "Chargement..." : priceStatus==="live" ? "Cours en direct" : "Cours de secours"}
+                </button>
+                {lastUpdated && <span style={{ fontSize: 9, color: "rgba(255,255,255,.25)" }}>
+                  Mis à jour {lastUpdated.toLocaleTimeString("fr-FR", {hour:"2-digit",minute:"2-digit"})}
+                </span>}
+              </div>
               <button onClick={() => setModal("add")} style={{
                 background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none",
                 color: "#fff", padding: "9px 16px", borderRadius: 10,
@@ -434,7 +508,9 @@
                 <span style={{ fontSize: 10, color: "rgba(255,255,255,.4)" }}>{l}</span>
               </div>
             ))}
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,.18)", marginLeft: 4 }}>· Cours au 4 mars 2026</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,.18)", marginLeft: 4 }}>
+            {priceStatus === "live" ? "· Cours en direct — Yahoo Finance" : priceStatus === "fallback" ? "· Cours de secours (4 mars 2026)" : "· Chargement des cours..."}
+          </span>
           </div>
 
           {/* ── Grid ── */}
@@ -444,7 +520,7 @@
             gap: 14 }}>
             {filtered.map((stock, i) => (
               <div key={`${stock.id}-${refreshKey}`} style={{ animationDelay: `${i*50}ms` }}>
-                <StockCard stock={stock} onEdit={s => setModal(s)} onDelete={id => setStocks(s => s.filter(x => x.id !== id))} />
+                <StockCard stock={stock} onEdit={s => setModal(s)} onDelete={id => setStocks(s => s.filter(x => x.id !== id))} livePrices={livePrices} />
               </div>
             ))}
             {filtered.length === 0 && (
