@@ -389,29 +389,38 @@ function save() {
 }
 
 // ── PRICE FETCHING ────────────────────────────────────────────────────────────
-// On utilise un proxy CORS public pour contourner les restrictions CORS de Yahoo Finance.
-// allorigins.win renvoie le contenu de n'importe quelle URL en JSON.
-const CORS_PROXY = 'https://api.allorigins.win/get?url=';
+// Plusieurs proxies en cascade : si l'un échoue, on essaie le suivant
+const PROXIES = [
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+];
+
+async function fetchWithProxy(yahooUrl) {
+    for (const makeProxy of PROXIES) {
+        try {
+            const resp = await fetch(makeProxy(yahooUrl), { signal: AbortSignal.timeout(8000) });
+            if (!resp.ok) continue;
+            const raw = await resp.json();
+            // allorigins renvoie { contents: "..." }, corsproxy renvoie directement le JSON
+            const text = raw.contents ?? JSON.stringify(raw);
+            return JSON.parse(text);
+        } catch(e) {
+            continue; // essaie le proxy suivant
+        }
+    }
+    return null;
+}
 
 async function fetchPrice(ticker) {
-    // Yahoo Finance API v8 – endpoint officiel non documenté mais stable
     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
-    const proxiedUrl = CORS_PROXY + encodeURIComponent(yahooUrl);
-
     try {
-        const resp = await fetch(proxiedUrl, { signal: AbortSignal.timeout(8000) });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
-        const wrapper = await resp.json();
-        // allorigins renvoie { contents: "..." }
-        const data = JSON.parse(wrapper.contents);
+        const data = await fetchWithProxy(yahooUrl);
         const meta = data?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('No meta');
-
-        // regularMarketPrice = cours en temps réel (ou clôture si hors séance)
+        if (!meta) return { ok: false };
         const price = meta.regularMarketPrice ?? meta.previousClose;
         const prev  = meta.chartPreviousClose ?? meta.previousClose ?? price;
         const currency = meta.currency ?? '';
+        if (!price || price <= 0) return { ok: false };
         return { price, prev, currency, ok: true };
     } catch(e) {
         console.warn(`[${ticker}] fetch error:`, e.message);
@@ -422,27 +431,27 @@ async function fetchPrice(ticker) {
 async function refreshAll() {
     const btn = document.getElementById('refreshBtn');
     btn.classList.add('spinning');
-
-    // On lance toutes les requêtes en parallèle
-    const results = await Promise.all(stocks.map(s => fetchPrice(s.ticker)));
-
-    results.forEach((res, i) => {
-        if (res.ok && res.price > 0) {
-            stocks[i].currentPrice   = res.price;
-            stocks[i].previousClose  = res.prev;
-            stocks[i].currency       = res.currency;
-        }
-        // Si échec, on garde le dernier prix connu (pas de valeur simulée)
-    });
-
-    save();
-    renderWatchlist();
-
-    const now = new Date();
-    document.getElementById('last-update').textContent =
-        `Mis à jour ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
-
-    btn.classList.remove('spinning');
+    try {
+        const results = await Promise.all(stocks.map(s => fetchPrice(s.ticker)));
+        results.forEach((res, i) => {
+            if (res.ok && res.price > 0) {
+                stocks[i].currentPrice  = res.price;
+                stocks[i].previousClose = res.prev;
+                stocks[i].currency      = res.currency;
+            }
+            // Si échec → on garde le dernier prix connu, pas de page blanche
+        });
+        save();
+        renderWatchlist();
+        const now = new Date();
+        document.getElementById('last-update').textContent =
+            `Mis à jour ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    } catch(e) {
+        console.error('refreshAll error:', e);
+        // La page reste visible avec les données en cache
+    } finally {
+        btn.classList.remove('spinning');
+    }
 }
 
 // ── ZONE LOGIC ───────────────────────────────────────────────────────────────
@@ -601,8 +610,8 @@ async function addStock() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
-renderWatchlist();
-refreshAll(); // Premier chargement immédiat
+renderWatchlist(); // Affiche immédiatement les données en cache (pas de page blanche)
+refreshAll();      // Puis tente de récupérer les vrais prix en arrière-plan
 
 // Auto-refresh toutes les 5 minutes
 setInterval(refreshAll, 5 * 60 * 1000);
