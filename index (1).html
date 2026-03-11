@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Club Bourseko – Watchlist</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f11;
+            --surface: #1a1a1f;
+            --surface2: #222228;
+            --border: #2e2e38;
+            --text: #e8e8f0;
+            --muted: #6b6b80;
+            --accent: #4f8ef7;
+
+            --z1-bg: #1a2a1a;
+            --z1-border: #4caf50;
+            --z1-text: #81c784;
+            --z2-bg: #2a2a14;
+            --z2-border: #f5a623;
+            --z2-text: #ffcc66;
+            --z3-bg: #2a1a1a;
+            --z3-border: #e53935;
+            --z3-text: #ef9a9a;
+            --z4-bg: #1a2a2a;
+            --z4-border: #00bcd4;
+            --z4-text: #80deea;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── HEADER ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 28px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .brand { display: flex; flex-direction: column; }
+        .brand-name {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: 17px;
+            letter-spacing: 0.02em;
+            color: var(--text);
+        }
+        .brand-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px; }
+
+        .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+        .refresh-btn {
+            display: flex; align-items: center; gap: 7px;
+            background: transparent; border: 1px solid var(--border);
+            color: var(--muted); border-radius: 8px;
+            padding: 8px 14px; font-size: 13px; cursor: pointer;
+            transition: all 0.2s; font-family: 'Inter', sans-serif;
+        }
+        .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .refresh-btn.spinning svg { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        #last-update { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+        .add-btn {
+            background: var(--accent); color: white; border: none;
+            border-radius: 8px; padding: 8px 18px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: opacity 0.2s; font-family: 'Inter', sans-serif;
+        }
+        .add-btn:hover { opacity: 0.85; }
+
+        /* ── LEGEND ── */
+        .legend-bar {
+            display: flex; align-items: center; gap: 20px;
+            padding: 10px 28px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            font-size: 11px; color: var(--muted);
+            flex-wrap: wrap;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        /* ── MAIN ── */
+        main { padding: 24px 28px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        /* ── CARD ── */
+        .stock-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            position: relative;
+            transition: transform 0.15s, box-shadow 0.15s;
+            overflow: hidden;
+        }
+        .stock-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+        .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+
+        .ticker-row { display: flex; align-items: center; gap: 8px; }
+        .ticker {
+            font-family: 'Syne', sans-serif;
+            font-size: 20px; font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+        .market-badge {
+            font-size: 9px; font-weight: 600; padding: 2px 6px;
+            border-radius: 4px; text-transform: uppercase; letter-spacing: 0.08em;
+        }
+        .market-eu { background: #1e3a5f; color: #90caf9; }
+        .market-us { background: #1a3a2a; color: #a5d6a7; }
+
+        .zone-badge {
+            font-size: 10px; font-weight: 600; padding: 3px 8px;
+            border-radius: 6px; letter-spacing: 0.05em;
+        }
+
+        .company-name { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+
+        /* Price display */
+        .price-display { margin-bottom: 14px; }
+        .current-price {
+            font-family: 'DM Mono', monospace;
+            font-size: 30px; font-weight: 500;
+            line-height: 1;
+        }
+        .price-loading { font-size: 13px; color: var(--muted); font-style: italic; }
+        .price-change {
+            font-size: 12px; margin-top: 4px;
+            font-family: 'DM Mono', monospace;
+        }
+        .price-change.pos { color: var(--z1-text); }
+        .price-change.neg { color: var(--z3-text); }
+
+        /* Zones row */
+        .zones-row {
+            display: flex; gap: 6px;
+            margin-bottom: 14px;
+        }
+        .zone-pill {
+            flex: 1; text-align: center;
+            padding: 7px 4px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+        }
+        .zone-pill .zone-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.7; margin-bottom: 2px; }
+        .zone-pill .zone-price { font-weight: 500; font-size: 12px; }
+
+        .z1 { background: rgba(76,175,80,0.12); border: 1px solid rgba(76,175,80,0.25); color: var(--z1-text); }
+        .z2 { background: rgba(245,166,35,0.12); border: 1px solid rgba(245,166,35,0.25); color: var(--z2-text); }
+        .z3 { background: rgba(229,57,53,0.12); border: 1px solid rgba(229,57,53,0.25); color: var(--z3-text); }
+        .z1.active, .z2.active, .z3.active { border-width: 2px; }
+        .z1.active { background: rgba(76,175,80,0.22); }
+        .z2.active { background: rgba(245,166,35,0.22); }
+        .z3.active { background: rgba(229,57,53,0.22); }
+
+        /* Progress slider */
+        .slider-track {
+            position: relative; height: 6px;
+            background: var(--surface2);
+            border-radius: 3px; margin-bottom: 14px;
+            overflow: visible;
+        }
+        .slider-fill {
+            height: 100%; border-radius: 3px;
+            transition: width 0.6s ease;
+        }
+        .slider-thumb {
+            position: absolute; top: 50%;
+            width: 12px; height: 12px;
+            border-radius: 50%; border: 2px solid white;
+            transform: translate(-50%, -50%);
+            transition: left 0.6s ease;
+            pointer-events: none;
+        }
+        .slider-labels {
+            display: flex; justify-content: space-between;
+            font-size: 9px; color: var(--muted); margin-top: 4px;
+            font-family: 'DM Mono', monospace;
+        }
+
+        /* Meta row */
+        .meta-row {
+            display: flex; gap: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 11px; color: var(--muted);
+        }
+        .meta-item .meta-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+        .meta-item .meta-val { color: var(--text); font-weight: 500; }
+
+        /* Card status tints */
+        .card-z1 { border-color: rgba(76,175,80,0.35); }
+        .card-z2 { border-color: rgba(245,166,35,0.35); }
+        .card-z3 { border-color: rgba(229,57,53,0.35); }
+        .card-z4 { border-color: rgba(0,188,212,0.35); }
+
+        /* Delete btn */
+        .card-actions { position: absolute; top: 14px; right: 14px; display: flex; gap: 6px; }
+        .icon-btn {
+            width: 26px; height: 26px;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s; color: var(--muted);
+        }
+        .icon-btn:hover { border-color: #e53935; color: #e53935; }
+        .icon-btn svg { width: 13px; height: 13px; }
+
+        /* ── MODAL ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            z-index: 200; align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 16px; padding: 28px; width: 100%; max-width: 400px;
+            margin: 20px;
+        }
+        .modal h2 {
+            font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .modal label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.07em; }
+        .modal input {
+            width: 100%; padding: 10px 13px;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-size: 14px;
+            font-family: 'DM Mono', monospace;
+            margin-bottom: 14px; outline: none;
+        }
+        .modal input:focus { border-color: var(--accent); }
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        .modal-grid > div { display: flex; flex-direction: column; }
+        .modal-grid label { font-size: 10px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.07em; }
+        .modal-grid input { margin-bottom: 0; }
+        .modal-footer { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-cancel {
+            flex: 1; padding: 11px; background: transparent;
+            border: 1px solid var(--border); color: var(--muted);
+            border-radius: 8px; cursor: pointer; font-size: 14px;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-add {
+            flex: 2; padding: 11px; background: var(--accent);
+            border: none; color: white; border-radius: 8px;
+            cursor: pointer; font-size: 14px; font-weight: 600;
+            font-family: 'Inter', sans-serif;
+        }
+        .meta-select {
+            width: 100%; padding: 10px 13px;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-size: 14px;
+            margin-bottom: 14px; outline: none; cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+        .meta-select:focus { border-color: var(--accent); }
+
+        /* empty state */
+        .empty {
+            text-align: center; padding: 60px 20px; color: var(--muted);
+        }
+        .empty p { font-size: 15px; margin-top: 10px; }
+
+        @media (max-width: 600px) {
+            header { padding: 14px 16px; }
+            main { padding: 16px; }
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <span class="brand-name">Club Bourseko</span>
+        <span class="brand-sub">Watchlist · Mars 2026</span>
+    </div>
+    <div class="header-right">
+        <span id="last-update">—</span>
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M23 4v6h-6M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            Yahoo Finance
+        </button>
+        <button class="add-btn" onclick="openModal()">+ Ajouter</button>
+    </div>
+</header>
+
+<div class="legend-bar">
+    <span style="margin-right:4px; font-size:10px; text-transform:uppercase; letter-spacing:.1em;">Zones :</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#4caf50"></span> E1 – Meilleur prix</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#f5a623"></span> E2 – Zone intermédiaire</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#e53935"></span> E3 – Prix élevé</span>
+    <span style="margin-left:auto; font-size:10px; opacity:.6">Cours en direct · Yahoo Finance</span>
+</div>
+
+<main>
+    <div class="grid" id="watchlist"></div>
+</main>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+    <div class="modal">
+        <h2>Ajouter une action</h2>
+        <label>Ticker Yahoo Finance</label>
+        <input type="text" id="f-ticker" placeholder="ex: ADYEN.AS, NVDA, RACE.MI" />
+        <label>Marché</label>
+        <select class="meta-select" id="f-market">
+            <option value="EU">🇪🇺 Europe</option>
+            <option value="US">🇺🇸 États-Unis</option>
+        </select>
+        <div class="modal-grid">
+            <div>
+                <label>E1 – Bas</label>
+                <input type="number" id="f-p1" placeholder="900" />
+            </div>
+            <div>
+                <label>E2 – Moyen</label>
+                <input type="number" id="f-p2" placeholder="1200" />
+            </div>
+            <div>
+                <label>E3 – Haut</label>
+                <input type="number" id="f-p3" placeholder="1450" />
+            </div>
+        </div>
+        <label>Entreprise (optionnel)</label>
+        <input type="text" id="f-name" placeholder="ex: Adyen N.V." />
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+            <button class="btn-add" onclick="addStock()">Ajouter</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const defaultStocks = [
+    { id: 1,  ticker: "ADYEN.AS", name: "Adyen",         market: "EU", p1: 900,  p2: 1200, p3: 1450, ca: "+17.9%", per: "24.9x", roce: "20.5%", style: "Croissance" },
+    { id: 2,  ticker: "AI.PA",    name: "EssilorLuxottica", market: "EU", p1: 150, p2: 185,  p3: 215,  ca: "+9.4%",  per: "33x",   roce: "6.7%",  style: "Faible volatilité" },
+    { id: 3,  ticker: "AXP",      name: "American Express", market: "US", p1: 230, p2: 290,  p3: 350,  ca: "+10.2%", per: "21.6x", roce: "11.1%", style: "GARP" },
+    { id: 4,  ticker: "BKNG",     name: "Booking.com",   market: "US", p1: 2800, p2: 3800, p3: 4600, ca: "+13.4%", per: "17.8x", roce: "71.1%", style: "GARP" },
+    { id: 5,  ticker: "BMI",      name: "Badger Meter",  market: "US", p1: 97,   p2: 135,  p3: 160,  ca: "+10.9%", per: "29.8x", roce: "24.1%", style: "Most durable" },
+    { id: 6,  ticker: "MELI",     name: "MercadoLibre",  market: "US", p1: 1200, p2: 1750, p3: 2050, ca: "+39.1%", per: "30.4x", roce: "28.3%", style: "GARP" },
+    { id: 7,  ticker: "MSFT",     name: "Microsoft",     market: "US", p1: 280,  p2: 360,  p3: 430,  ca: "+14.9%", per: "23.2x", roce: "29.7%", style: "Croissance / Très fort Moat" },
+    { id: 8,  ticker: "NEMETSCHEK.DE", name: "Nemetschek", market: "EU", p1: 37, p2: 58,  p3: 84,   ca: "+22.6%", per: "27.0x", roce: "23.1%", style: "Croissance – Contrarian" },
+    { id: 9,  ticker: "NVDA",     name: "Nvidia",        market: "US", p1: 120,  p2: 160,  p3: 200,  ca: "+65.6%", per: "19.3x", roce: "74.7%", style: "Croissance" },
+    { id: 10, ticker: "RACE.MI",  name: "Ferrari",       market: "EU", p1: 200,  p2: 280,  p3: 350,  ca: "+7%",    per: "33.7x", roce: "28.5%", style: "Très fort Moat" },
+    { id: 11, ticker: "SPGI",     name: "S&P Global",    market: "US", p1: 300,  p2: 370,  p3: 450,  ca: "+7.9%",  per: "22.7x", roce: "12%",   style: "Récurrence / Très Fort Moat" },
+];
+
+let stocks = [];
+try {
+    const saved = localStorage.getItem('bourseko_v2');
+    stocks = saved ? JSON.parse(saved) : defaultStocks;
+    if (!stocks.length) stocks = defaultStocks;
+} catch(e) { stocks = defaultStocks; }
+
+function save() {
+    try { localStorage.setItem('bourseko_v2', JSON.stringify(stocks)); } catch(e) {}
+}
+
+// ── PRICE FETCHING ────────────────────────────────────────────────────────────
+// On utilise un proxy CORS public pour contourner les restrictions CORS de Yahoo Finance.
+// allorigins.win renvoie le contenu de n'importe quelle URL en JSON.
+const CORS_PROXY = 'https://api.allorigins.win/get?url=';
+
+async function fetchPrice(ticker) {
+    // Yahoo Finance API v8 – endpoint officiel non documenté mais stable
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+    const proxiedUrl = CORS_PROXY + encodeURIComponent(yahooUrl);
+
+    try {
+        const resp = await fetch(proxiedUrl, { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+        const wrapper = await resp.json();
+        // allorigins renvoie { contents: "..." }
+        const data = JSON.parse(wrapper.contents);
+        const meta = data?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('No meta');
+
+        // regularMarketPrice = cours en temps réel (ou clôture si hors séance)
+        const price = meta.regularMarketPrice ?? meta.previousClose;
+        const prev  = meta.chartPreviousClose ?? meta.previousClose ?? price;
+        const currency = meta.currency ?? '';
+        return { price, prev, currency, ok: true };
+    } catch(e) {
+        console.warn(`[${ticker}] fetch error:`, e.message);
+        return { ok: false };
+    }
+}
+
+async function refreshAll() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('spinning');
+
+    // On lance toutes les requêtes en parallèle
+    const results = await Promise.all(stocks.map(s => fetchPrice(s.ticker)));
+
+    results.forEach((res, i) => {
+        if (res.ok && res.price > 0) {
+            stocks[i].currentPrice   = res.price;
+            stocks[i].previousClose  = res.prev;
+            stocks[i].currency       = res.currency;
+        }
+        // Si échec, on garde le dernier prix connu (pas de valeur simulée)
+    });
+
+    save();
+    renderWatchlist();
+
+    const now = new Date();
+    document.getElementById('last-update').textContent =
+        `Mis à jour ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+
+    btn.classList.remove('spinning');
+}
+
+// ── ZONE LOGIC ───────────────────────────────────────────────────────────────
+function getZone(price, p1, p2, p3) {
+    if (!price) return null;
+    if (price <= p1)            return 1; // E1 – meilleur prix (vert)
+    if (price <= p2)            return 2; // E2 – intermédiaire (orange)
+    if (price <= p3)            return 3; // E3 – prix élevé (rouge)
+    return 4;                             // Au-dessus de tout (gris)
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+function renderWatchlist() {
+    const container = document.getElementById('watchlist');
+    container.innerHTML = '';
+
+    if (!stocks.length) {
+        container.innerHTML = `<div class="empty" style="grid-column:1/-1">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4">
+                <path d="M3 3h18v18H3zM3 9h18M9 21V9"/>
+            </svg>
+            <p>Votre watchlist est vide.<br>Ajoutez une première action.</p>
+        </div>`;
+        return;
+    }
+
+    stocks.forEach(stock => {
+        const price  = stock.currentPrice;
+        const zone   = getZone(price, stock.p1, stock.p2, stock.p3);
+        const prev   = stock.previousClose;
+        const sym    = stock.currency === 'EUR' ? '€' : stock.currency === 'USD' ? '$' : '';
+
+        // Zone badge & card class
+        const zoneLabels = { 1: 'Zone E1', 2: 'Zone E2', 3: 'Zone E3', 4: 'Au-dessus' };
+        const zoneColors = {
+            1: { badge: 'background:rgba(76,175,80,.2);color:#81c784', card: 'card-z1' },
+            2: { badge: 'background:rgba(245,166,35,.2);color:#ffcc66', card: 'card-z2' },
+            3: { badge: 'background:rgba(229,57,53,.2);color:#ef9a9a', card: 'card-z3' },
+            4: { badge: 'background:rgba(107,107,128,.2);color:#9e9eb8', card: '' },
+        };
+        const zc = zone ? zoneColors[zone] : zoneColors[4];
+
+        // Price change
+        let changeHtml = '';
+        if (price && prev && prev > 0) {
+            const chg    = price - prev;
+            const chgPct = (chg / prev) * 100;
+            const sign   = chg >= 0 ? '+' : '';
+            const cls    = chg >= 0 ? 'pos' : 'neg';
+            changeHtml = `<div class="price-change ${cls}">${sign}${chg.toFixed(2)}${sym} (${sign}${chgPct.toFixed(2)}%)</div>`;
+        }
+
+        // Slider: position entre p1 (0%) et p3 (100%)
+        let sliderHtml = '';
+        if (price) {
+            const lo  = stock.p1 * 0.8;
+            const hi  = stock.p3 * 1.15;
+            const pct = Math.max(0, Math.min(100, ((price - lo) / (hi - lo)) * 100));
+            const colors = { 1: '#4caf50', 2: '#f5a623', 3: '#e53935', 4: '#6b6b80' };
+            const col = colors[zone] || '#6b6b80';
+            sliderHtml = `
+                <div class="slider-track">
+                    <div class="slider-fill" style="width:${pct}%;background:linear-gradient(90deg,#4caf5066,${col})"></div>
+                    <div class="slider-thumb" style="left:${pct}%;background:${col}"></div>
+                </div>
+                <div class="slider-labels">
+                    <span>← E1 Meilleur prix</span>
+                    <span>E3 Prix haut →</span>
+                </div>
+            `;
+        }
+
+        // Zone pills
+        const activeZ = zone ?? 4;
+        const pillZ1 = `<div class="zone-pill z1${activeZ===1?' active':''}"><div class="zone-label">E1</div><div class="zone-price">${stock.p1}${sym}</div></div>`;
+        const pillZ2 = `<div class="zone-pill z2${activeZ===2?' active':''}"><div class="zone-label">E2</div><div class="zone-price">${stock.p2}${sym}</div></div>`;
+        const pillZ3 = `<div class="zone-pill z3${activeZ===3?' active':''}"><div class="zone-label">E3</div><div class="zone-price">${stock.p3}${sym}</div></div>`;
+
+        const card = document.createElement('div');
+        card.className = `stock-card ${zc.card}`;
+        card.innerHTML = `
+            <div class="card-actions">
+                <div class="icon-btn" onclick="deleteStock(${stock.id})" title="Supprimer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </div>
+            </div>
+            <div class="card-top">
+                <div class="ticker-row">
+                    <span class="ticker">${stock.ticker.split('.')[0]}</span>
+                    <span class="market-badge market-${(stock.market||'US').toLowerCase()}">${stock.market||'US'}</span>
+                </div>
+                ${zone ? `<span class="zone-badge" style="${zc.badge}">${zoneLabels[zone]}</span>` : ''}
+            </div>
+            <div class="company-name">${stock.name || ''}</div>
+            <div class="price-display">
+                ${price
+                    ? `<div class="current-price">${price.toFixed(2)}${sym}</div>${changeHtml}`
+                    : `<div class="price-loading">Prix indisponible — <span style="color:var(--accent)">Yahoo Finance</span> <span style="font-size:18px">↗</span></div>`
+                }
+            </div>
+            ${sliderHtml}
+            <div class="zones-row">${pillZ1}${pillZ2}${pillZ3}</div>
+            ${stock.ca || stock.per || stock.roce ? `
+            <div class="meta-row">
+                ${stock.ca   ? `<div class="meta-item"><div class="meta-label">CA+</div><div class="meta-val">${stock.ca}</div></div>` : ''}
+                ${stock.per  ? `<div class="meta-item"><div class="meta-label">PER</div><div class="meta-val">${stock.per}</div></div>` : ''}
+                ${stock.roce ? `<div class="meta-item"><div class="meta-label">ROCE</div><div class="meta-val">${stock.roce}</div></div>` : ''}
+                ${stock.style ? `<div class="meta-item" style="margin-left:auto;text-align:right"><div class="meta-label">STYLE</div><div class="meta-val" style="font-size:10px">${stock.style}</div></div>` : ''}
+            </div>` : ''}
+        `;
+        container.appendChild(card);
+    });
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────────────────
+function deleteStock(id) {
+    stocks = stocks.filter(s => s.id !== id);
+    save();
+    renderWatchlist();
+}
+
+function openModal()  { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function addStock() {
+    const ticker = document.getElementById('f-ticker').value.trim().toUpperCase();
+    const p1     = parseFloat(document.getElementById('f-p1').value);
+    const p2     = parseFloat(document.getElementById('f-p2').value);
+    const p3     = parseFloat(document.getElementById('f-p3').value);
+    const market = document.getElementById('f-market').value;
+    const name   = document.getElementById('f-name').value.trim();
+
+    if (!ticker || isNaN(p1) || isNaN(p2) || isNaN(p3)) {
+        alert("Veuillez remplir le ticker et les trois zones de prix.");
+        return;
+    }
+
+    const newStock = { id: Date.now(), ticker, name, market, p1, p2, p3 };
+    stocks.push(newStock);
+    save();
+    closeModal();
+
+    // Réinitialiser formulaire
+    ['f-ticker','f-p1','f-p2','f-p3','f-name'].forEach(id => document.getElementById(id).value = '');
+
+    renderWatchlist();
+
+    // Fetch le prix de la nouvelle action
+    const res = await fetchPrice(ticker);
+    if (res.ok) {
+        const s = stocks.find(s => s.id === newStock.id);
+        if (s) { s.currentPrice = res.price; s.previousClose = res.prev; s.currency = res.currency; }
+        save();
+        renderWatchlist();
+    }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+renderWatchlist();
+refreshAll(); // Premier chargement immédiat
+
+// Auto-refresh toutes les 5 minutes
+setInterval(refreshAll, 5 * 60 * 1000);
+</script>
+</body>
+</html>
